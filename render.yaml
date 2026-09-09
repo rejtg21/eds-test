@@ -1,0 +1,127 @@
+# Render Blueprint — event-driven demo
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: render-test-db
+    plan: free
+    databaseName: render_test
+    user: render_test
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis / Key Value — the piece under test. Job distribution across the two
+  # consumers is handled here by BullMQ.
+  # ---------------------------------------------------------------------------
+  - type: keyvalue
+    name: render-test-kv
+    plan: free
+    ipAllowList: []            # reachable only from inside Render
+    maxmemoryPolicy: noeviction # required by BullMQ
+
+  # ---------------------------------------------------------------------------
+  # NestJS HTTP API — writes the business row + outbox row in one transaction.
+  # Does NOT touch Redis.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: api
+    runtime: node
+    plan: free
+    rootDir: api
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run start:api
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: render-test-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: render-test-kv
+          property: connectionString
+      - key: DB_SYNC          # only the API creates/syncs the schema
+        value: "true"
+
+  # ---------------------------------------------------------------------------
+  # Outbox relay — drains outbox_events -> Redis queue.
+  # Render has no free background workers, so this is `starter`.
+  # To stay free: switch `type` to `web` and add a dummy PORT listener.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: outbox-relay
+    runtime: node
+    plan: starter
+    rootDir: api
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run start:relay
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: render-test-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: render-test-kv
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Consumer #1
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: consumer-1
+    runtime: node
+    plan: starter
+    rootDir: api
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run start:consumer
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: render-test-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: render-test-kv
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Consumer #2 — identical code, different RENDER_SERVICE_NAME (auto-injected
+  # by Render) so you can see which instance handled each event.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: consumer-2
+    runtime: node
+    plan: starter
+    rootDir: api
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run start:consumer
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: render-test-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: render-test-kv
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Next.js web — the button.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: web
+    runtime: node
+    plan: free
+    rootDir: web
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run start
+    envVars:
+      - key: API_URL
+        fromService:
+          type: web
+          name: api
+          property: host

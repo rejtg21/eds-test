@@ -1,0 +1,7 @@
+# pnpm settings (not a monorepo — this file is just pnpm's settings home).
+# Permit these dependencies to run their install scripts:
+#   @nestjs/core   -> prints a funding message
+#   msgpackr-extract -> optional native speed-up for BullMQ's msgpack codec
+allowBuilds:
+  '@nestjs/core': true
+  msgpackr-extract: true
