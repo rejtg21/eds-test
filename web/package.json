@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "next dev -p 3000",
+    "prebuild": "corepack enable || true",
     "build": "next build",
     "start": "next start"
   },

@@ -98,6 +98,7 @@ Once live, open the `web` service URL and click the button.
 | [`ci.yml`](.github/workflows/ci.yml) | every push to `main`, every PR | `pnpm install --frozen-lockfile && pnpm run build` for `api` and `web`; asserts all 3 api entrypoints compiled; runs the full outbox → Redis → consumer flow against ephemeral Postgres + Redis service containers |
 | [`deploy-render.yml`](.github/workflows/deploy-render.yml) | push to `main` under `api/**` or `render.yaml` (+ manual) | rebuilds, then POSTs the Render **deploy hooks** for `api`, `outbox-relay`, `consumer-1`, `consumer-2` |
 | [`deploy-vercel.yml`](.github/workflows/deploy-vercel.yml) | `web/**` — PR → preview, push to `main` → production | `vercel pull` / `vercel build` / `vercel deploy --prebuilt` |
+| [`deploy-railway.yml`](.github/workflows/deploy-railway.yml) | push to `main` (+ manual); path-filtered so only the changed side deploys | rebuilds, then `railway up --ci --service …` for `api` + the 3 workers and/or `web` |
 
 ### Required repository secrets
 
@@ -119,3 +120,18 @@ Once live, open the `web` service URL and click the button.
 | `VERCEL_PROJECT_ID` | `web/.vercel/project.json` → `projectId` |
 
 Also set an **`API_URL`** environment variable on the Vercel project (Production + Preview) to the Render `api` URL, e.g. `https://api-xxxx.onrender.com` — the Next.js proxy in [`web/app/api/orders/route.ts`](web/app/api/orders/route.ts) reads it.
+
+**Railway** — one secret:
+
+| Secret | From |
+| --- | --- |
+| `RAILWAY_TOKEN` | Railway → your project → *Settings → Tokens* → create a **Project token** (bound to one environment, e.g. `production`) |
+
+Railway-side setup (once), matching the Render layout:
+
+- **5 services** in one project: `api`, `outbox-relay`, `consumer-1`, `consumer-2` with Root Directory `api`; `web` with Root Directory `web`. Add a **Postgres** and a **Redis** plugin and reference their connection strings as `DATABASE_URL` / `REDIS_URL` on each service.
+- **Build command** (all): `corepack enable && pnpm install --frozen-lockfile && pnpm run build`
+- **Custom start command** per service: `pnpm run start:api` / `start:relay` / `start:consumer` / `start:consumer` / `pnpm run start` (web).
+- **Variables**: `DB_SYNC=true` on `api` only; `RENDER_SERVICE_NAME=consumer-1` / `consumer-2` on the two consumers; `API_URL` on `web` = the `api` service's public URL.
+- Service names in [`deploy-railway.yml`](.github/workflows/deploy-railway.yml) (`api`, `outbox-relay`, …) must match what you name them in Railway — edit the `for svc in …` list if they differ.
+- If the services are GitHub-connected in Railway, they already auto-deploy on push — skip this workflow.
