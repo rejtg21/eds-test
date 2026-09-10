@@ -2,9 +2,9 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
-import { OutboxEventEntity } from '../entities/outbox-event.entity';
-import { ORDER_EVENTS_QUEUE } from '../events/order-events';
-import { getRedisConnection } from '../redis/redis.connection';
+import { OutboxEventEntity } from '../shared/entities/outbox-event.entity';
+import { ORDER_EVENTS_QUEUE } from '../shared/events/order-events';
+import { getRedisConnection } from '../shared/redis/redis.connection';
 
 const BATCH_SIZE = 20;
 

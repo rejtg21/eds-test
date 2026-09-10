@@ -3,10 +3,12 @@
 A minimal **event-driven system** you can deploy to [Render](https://render.com):
 
 - **`web/`** – Next.js app. One button → creates an order via the API.
-- **`api/`** – NestJS. Ships **three** runnable processes from one codebase:
-  1. **HTTP API** – writes an `orders` row **and** an `outbox_events` row **in a single DB transaction** (transactional outbox pattern). It never talks to Redis directly.
-  2. **Outbox relay** – polls the outbox table and publishes pending events to a **Redis** queue (BullMQ), then marks them published.
-  3. **Consumer** – a BullMQ worker that consumes events and runs the task (updates the order). Deployed **twice** (`consumer-1`, `consumer-2`) so you can watch Redis distribute jobs across instances.
+- **`api/`** – NestJS. Ships **three** runnable processes from one codebase, one folder each under `src/` plus a `shared/` library:
+  1. **HTTP API** (`src/api/`) – writes an `orders` row **and** an `outbox_events` row **in a single DB transaction** (transactional outbox pattern). It never talks to Redis directly.
+  2. **Outbox relay** (`src/relay/`) – polls the outbox table and publishes pending events to a **Redis** queue (BullMQ), then marks them published.
+  3. **Consumer** (`src/consumer/`) – a BullMQ worker that consumes events and runs the task (updates the order). Deployed **twice** (`consumer-1`, `consumer-2`) so you can watch Redis distribute jobs across instances.
+
+  `src/shared/` holds what all three import and none of them own: the TypeORM entities (incl. the `outbox_events` table), the database module, the Redis connection factory, and the event/queue contracts.
 
 ```mermaid
 flowchart LR
@@ -24,9 +26,9 @@ flowchart LR
 
 | Concept | Where |
 | --- | --- |
-| **Transaction** | `api/src/orders/orders.service.ts` – order + outbox row committed atomically. `api/src/consumer/order-consumer.service.ts` – order update + idempotency row committed atomically. |
-| **Outbox** | `outbox_events` table (`api/src/entities/outbox-event.entity.ts`). Written in the same TX as the business change; drained by `api/src/outbox/outbox-relay.service.ts`. |
-| **Event** | `order.created` – payload defined in `api/src/events/order-events.ts`, carried through Redis to the consumers. |
+| **Transaction** | `api/src/api/orders/orders.service.ts` – order + outbox row committed atomically. `api/src/consumer/order-consumer.service.ts` – order update + idempotency row committed atomically. |
+| **Outbox** | `outbox_events` table (`api/src/shared/entities/outbox-event.entity.ts`). Written in the same TX as the business change; drained by `api/src/relay/outbox-relay.service.ts`. |
+| **Event** | `order.created` – payload defined in `api/src/shared/events/order-events.ts`, carried through Redis to the consumers. |
 
 Delivery is **at-least-once**: the relay publishes then marks the row `PUBLISHED`. If it crashes in between, the event is re-published. Consumers are **idempotent** via the `processed_events` table, so a duplicate delivery is a no-op.
 

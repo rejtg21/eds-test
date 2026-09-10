@@ -9,12 +9,12 @@
   "scripts": {
     "prebuild": "corepack enable || true",
     "build": "nest build",
-    "start:api": "node dist/main.js",
-    "start:relay": "node dist/worker-relay.js",
-    "start:consumer": "node dist/worker-consumer.js",
+    "start:api": "node dist/api/main.js",
+    "start:relay": "node dist/relay/main.js",
+    "start:consumer": "node dist/consumer/main.js",
     "dev:api": "nest start --watch",
-    "dev:relay": "ts-node src/worker-relay.ts",
-    "dev:consumer": "ts-node src/worker-consumer.ts"
+    "dev:relay": "ts-node src/relay/main.ts",
+    "dev:consumer": "ts-node src/consumer/main.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

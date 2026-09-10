@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from './database/database.module';
+import { DatabaseModule } from '../shared/database/database.module';
 import { HealthController } from './health/health.controller';
 import { OrdersModule } from './orders/orders.module';
 
@@ -10,4 +10,4 @@ import { OrdersModule } from './orders/orders.module';
   imports: [DatabaseModule, OrdersModule],
   controllers: [HealthController],
 })
-export class AppModule {}
+export class ApiModule {}
