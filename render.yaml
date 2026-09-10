@@ -27,7 +27,7 @@ services:
     runtime: node
     plan: free
     rootDir: api
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start:api
     healthCheckPath: /health
     envVars:
@@ -53,7 +53,7 @@ services:
     runtime: node
     plan: starter
     rootDir: api
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start:relay
     envVars:
       - key: DATABASE_URL
@@ -74,7 +74,7 @@ services:
     runtime: node
     plan: starter
     rootDir: api
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start:consumer
     envVars:
       - key: DATABASE_URL
@@ -96,7 +96,7 @@ services:
     runtime: node
     plan: starter
     rootDir: api
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start:consumer
     envVars:
       - key: DATABASE_URL
@@ -117,7 +117,7 @@ services:
     runtime: node
     plan: free
     rootDir: web
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start
     envVars:
       - key: API_URL

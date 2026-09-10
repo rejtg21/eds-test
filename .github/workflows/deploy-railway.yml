@@ -1,0 +1,131 @@
+name: Deploy (Railway)
+
+# Builds, then deploys with the Railway CLI. The api/ side is 4 Railway services
+# (api, outbox-relay, consumer-1, consumer-2) that share Root Directory `api`
+# but each set their own Custom Start Command in the Railway dashboard:
+#   api            -> pnpm run start:api
+#   outbox-relay   -> pnpm run start:relay
+#   consumer-1     -> pnpm run start:consumer   (Variables: RENDER_SERVICE_NAME=consumer-1, DB_SYNC unset)
+#   consumer-2     -> pnpm run start:consumer   (Variables: RENDER_SERVICE_NAME=consumer-2, DB_SYNC unset)
+# The api service sets DB_SYNC=true. web/ is one service with Root Directory `web`.
+#
+# If your Railway services are connected to this GitHub repo, Railway already
+# auto-deploys on push and you don't need this workflow — use it only when the
+# services are CLI-deployed (not GitHub-connected).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'web/**'
+      - '.github/workflows/deploy-railway.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-railway
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+              - '.github/workflows/deploy-railway.yml'
+            web:
+              - 'web/**'
+              - '.github/workflows/deploy-railway.yml'
+
+  build-api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: api/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: api/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Verify worker entrypoints compiled
+        run: |
+          test -f dist/main.js
+          test -f dist/worker-relay.js
+          test -f dist/worker-consumer.js
+
+  build-web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+
+  deploy-api:
+    needs: build-api
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+      - name: Deploy api + workers
+        run: |
+          set -euo pipefail
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_TOKEN secret is missing"
+            exit 1
+          fi
+          for svc in api outbox-relay consumer-1 consumer-2; do
+            echo "::group::railway up --service $svc"
+            railway up --ci --service "$svc"
+            echo "::endgroup::"
+          done
+
+  deploy-web:
+    needs: build-web
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+      - name: Deploy web
+        run: |
+          set -euo pipefail
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::error::RAILWAY_TOKEN secret is missing"
+            exit 1
+          fi
+          railway up --ci --service web
