@@ -3,11 +3,11 @@ import 'dotenv/config';
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { OutboxRelayService } from './outbox/outbox-relay.service';
-import { OutboxModule } from './outbox/outbox.module';
+import { OutboxRelayService } from './outbox-relay.service';
+import { RelayModule } from './relay.module';
 
 async function bootstrap() {
-  const ctx = await NestFactory.createApplicationContext(OutboxModule);
+  const ctx = await NestFactory.createApplicationContext(RelayModule);
   ctx.enableShutdownHooks();
 
   const intervalMs = Number(process.env.RELAY_INTERVAL_MS ?? 2000);

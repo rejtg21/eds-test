@@ -3,8 +3,8 @@ import 'dotenv/config';
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ConsumerModule } from './consumer/consumer.module';
-import { OrderConsumerService } from './consumer/order-consumer.service';
+import { ConsumerModule } from './consumer.module';
+import { OrderConsumerService } from './order-consumer.service';
 
 async function bootstrap() {
   const ctx = await NestFactory.createApplicationContext(ConsumerModule);
