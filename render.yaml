@@ -119,6 +119,7 @@ services:
     rootDir: web
     buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start
+    healthCheckPath: /health
     envVars:
       - key: API_URL
         fromService:
