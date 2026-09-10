@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { OrderEntity } from '../entities/order.entity';
-import { OutboxEventEntity } from '../entities/outbox-event.entity';
-import { ORDER_CREATED } from '../events/order-events';
+import { OrderEntity } from '../../shared/entities/order.entity';
+import { OutboxEventEntity } from '../../shared/entities/outbox-event.entity';
+import { ORDER_CREATED } from '../../shared/events/order-events';
 
 export interface CreateOrderInput {
   customer: string;

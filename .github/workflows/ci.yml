@@ -40,9 +40,9 @@ jobs:
       - name: Verify worker entrypoints compiled
         if: matrix.app == 'api'
         run: |
-          test -f dist/main.js
-          test -f dist/worker-relay.js
-          test -f dist/worker-consumer.js
+          test -f dist/api/main.js
+          test -f dist/relay/main.js
+          test -f dist/consumer/main.js
 
   # Runs the real outbox -> Redis -> consumer flow against throwaway services.
   api-e2e:
@@ -92,10 +92,10 @@ jobs:
       - name: Boot API + relay + 2 consumers, place orders, assert processed
         run: |
           set -euo pipefail
-          DB_SYNC=true  node dist/main.js            > /tmp/api.log 2>&1 &
-          DB_SYNC=false node dist/worker-relay.js    > /tmp/relay.log 2>&1 &
-          DB_SYNC=false RENDER_SERVICE_NAME=consumer-1 node dist/worker-consumer.js > /tmp/c1.log 2>&1 &
-          DB_SYNC=false RENDER_SERVICE_NAME=consumer-2 node dist/worker-consumer.js > /tmp/c2.log 2>&1 &
+          DB_SYNC=true  node dist/api/main.js         > /tmp/api.log 2>&1 &
+          DB_SYNC=false node dist/relay/main.js       > /tmp/relay.log 2>&1 &
+          DB_SYNC=false RENDER_SERVICE_NAME=consumer-1 node dist/consumer/main.js > /tmp/c1.log 2>&1 &
+          DB_SYNC=false RENDER_SERVICE_NAME=consumer-2 node dist/consumer/main.js > /tmp/c2.log 2>&1 &
 
           for i in $(seq 1 30); do curl -sf localhost:3001/orders >/dev/null && break || sleep 1; done
 

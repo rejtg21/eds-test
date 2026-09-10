@@ -66,9 +66,9 @@ jobs:
       - run: pnpm run build
       - name: Verify worker entrypoints compiled
         run: |
-          test -f dist/main.js
-          test -f dist/worker-relay.js
-          test -f dist/worker-consumer.js
+          test -f dist/api/main.js
+          test -f dist/relay/main.js
+          test -f dist/consumer/main.js
 
   build-web:
     needs: changes

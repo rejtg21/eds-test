@@ -3,10 +3,10 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { Job, Worker } from 'bullmq';
 import * as os from 'os';
 import { DataSource } from 'typeorm';
-import { OrderEntity } from '../entities/order.entity';
-import { ProcessedEventEntity } from '../entities/processed-event.entity';
-import { ORDER_EVENTS_QUEUE } from '../events/order-events';
-import { getRedisConnection } from '../redis/redis.connection';
+import { OrderEntity } from '../shared/entities/order.entity';
+import { ProcessedEventEntity } from '../shared/entities/processed-event.entity';
+import { ORDER_EVENTS_QUEUE } from '../shared/events/order-events';
+import { getRedisConnection } from '../shared/redis/redis.connection';
 
 /**
  * Event consumer. Deployed as two identical instances (consumer-1, consumer-2).
