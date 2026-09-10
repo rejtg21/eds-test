@@ -88,3 +88,34 @@ It provisions:
 > **Cost note:** the 3 workers are `starter` (~$7/mo each) because Render does not offer free background workers. To stay fully free, change their `type` to `web` in `render.yaml` and give each a trivial port — but free web services sleep after 15 min of inactivity, which stalls the relay/consumers until the next request. Delete the Blueprint when you're done testing.
 
 Once live, open the `web` service URL and click the button.
+
+---
+
+## CI / CD (GitHub Actions)
+
+| Workflow | Trigger | What it does |
+| --- | --- | --- |
+| [`ci.yml`](.github/workflows/ci.yml) | every push to `main`, every PR | `pnpm install --frozen-lockfile && pnpm run build` for `api` and `web`; asserts all 3 api entrypoints compiled; runs the full outbox → Redis → consumer flow against ephemeral Postgres + Redis service containers |
+| [`deploy-render.yml`](.github/workflows/deploy-render.yml) | push to `main` under `api/**` or `render.yaml` (+ manual) | rebuilds, then POSTs the Render **deploy hooks** for `api`, `outbox-relay`, `consumer-1`, `consumer-2` |
+| [`deploy-vercel.yml`](.github/workflows/deploy-vercel.yml) | `web/**` — PR → preview, push to `main` → production | `vercel pull` / `vercel build` / `vercel deploy --prebuilt` |
+
+### Required repository secrets
+
+**Render** (each service → *Settings → Deploy Hook*, copy the URL). Also switch those services' *Auto-Deploy* to **Off** so the workflow is the only trigger.
+
+| Secret | From |
+| --- | --- |
+| `RENDER_DEPLOY_HOOK_API` | `api` service deploy hook |
+| `RENDER_DEPLOY_HOOK_OUTBOX_RELAY` | `outbox-relay` service deploy hook |
+| `RENDER_DEPLOY_HOOK_CONSUMER_1` | `consumer-1` service deploy hook |
+| `RENDER_DEPLOY_HOOK_CONSUMER_2` | `consumer-2` service deploy hook |
+
+**Vercel** — run `cd web && npx vercel link` once (project root = `web/`), then read `web/.vercel/project.json`:
+
+| Secret | From |
+| --- | --- |
+| `VERCEL_TOKEN` | vercel.com → Account Settings → Tokens |
+| `VERCEL_ORG_ID` | `web/.vercel/project.json` → `orgId` |
+| `VERCEL_PROJECT_ID` | `web/.vercel/project.json` → `projectId` |
+
+Also set an **`API_URL`** environment variable on the Vercel project (Production + Preview) to the Render `api` URL, e.g. `https://api-xxxx.onrender.com` — the Next.js proxy in [`web/app/api/orders/route.ts`](web/app/api/orders/route.ts) reads it.

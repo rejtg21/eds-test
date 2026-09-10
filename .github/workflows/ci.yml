@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, web]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ${{ matrix.app }}/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: ${{ matrix.app }}/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build
+
+      # The api build must emit all three entrypoints: HTTP API + the two workers.
+      - name: Verify worker entrypoints compiled
+        if: matrix.app == 'api'
+        run: |
+          test -f dist/main.js
+          test -f dist/worker-relay.js
+          test -f dist/worker-consumer.js
+
+  # Runs the real outbox -> Redis -> consumer flow against throwaway services.
+  api-e2e:
+    name: api e2e (outbox + events + transaction)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: render_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ['6379:6379']
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/render_test
+      REDIS_URL: redis://localhost:6379
+      PORT: '3001'
+      RELAY_INTERVAL_MS: '1000'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: api/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: api/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+
+      - name: Boot API + relay + 2 consumers, place orders, assert processed
+        run: |
+          set -euo pipefail
+          DB_SYNC=true  node dist/main.js            > /tmp/api.log 2>&1 &
+          DB_SYNC=false node dist/worker-relay.js    > /tmp/relay.log 2>&1 &
+          DB_SYNC=false RENDER_SERVICE_NAME=consumer-1 node dist/worker-consumer.js > /tmp/c1.log 2>&1 &
+          DB_SYNC=false RENDER_SERVICE_NAME=consumer-2 node dist/worker-consumer.js > /tmp/c2.log 2>&1 &
+
+          for i in $(seq 1 30); do curl -sf localhost:3001/orders >/dev/null && break || sleep 1; done
+
+          for i in $(seq 1 6); do
+            curl -sf -XPOST localhost:3001/orders -H 'content-type: application/json' -d '{}' >/dev/null
+          done
+
+          for i in $(seq 1 30); do
+            pending=$(curl -sf localhost:3001/orders | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(String(JSON.parse(d).filter(o=>o.status!=='PROCESSED').length)))")
+            echo "pending=$pending"
+            [ "$pending" = "0" ] && break || sleep 1
+          done
+
+          echo '--- relay ---'; cat /tmp/relay.log
+          echo '--- consumer-1 ---'; cat /tmp/c1.log
+          echo '--- consumer-2 ---'; cat /tmp/c2.log
+
+          [ "$pending" = "0" ] || { echo "orders were not all processed"; exit 1; }
+          grep -q 'Published' /tmp/relay.log
+          grep -q 'processed order' /tmp/c1.log
+          grep -q 'processed order' /tmp/c2.log
+          echo "OK: outbox drained, events consumed by both instances"

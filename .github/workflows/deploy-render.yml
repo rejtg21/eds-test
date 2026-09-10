@@ -1,0 +1,66 @@
+name: Deploy API + workers (Render)
+
+# Builds the NestJS bundle, then triggers a deploy of the api service and the
+# three workers (outbox-relay, consumer-1, consumer-2) via their Render deploy
+# hooks. Turn OFF "Auto-Deploy" on those Render services so this is the only
+# trigger, or leave it on and treat this as a manual/verified path.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'render.yaml'
+      - '.github/workflows/deploy-render.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-render
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: api/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: api/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Verify worker entrypoints compiled
+        run: |
+          test -f dist/main.js
+          test -f dist/worker-relay.js
+          test -f dist/worker-consumer.js
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hooks
+        env:
+          HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+          HOOK_RELAY: ${{ secrets.RENDER_DEPLOY_HOOK_OUTBOX_RELAY }}
+          HOOK_CONSUMER_1: ${{ secrets.RENDER_DEPLOY_HOOK_CONSUMER_1 }}
+          HOOK_CONSUMER_2: ${{ secrets.RENDER_DEPLOY_HOOK_CONSUMER_2 }}
+        run: |
+          set -euo pipefail
+          for name in HOOK_API HOOK_RELAY HOOK_CONSUMER_1 HOOK_CONSUMER_2; do
+            url="${!name}"
+            if [ -z "${url:-}" ]; then
+              echo "::error::Missing secret $name"
+              exit 1
+            fi
+            echo "Triggering $name"
+            curl -fsS -X POST "$url" -o /dev/null
+          done
+          echo "All Render deploys triggered."
