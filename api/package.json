@@ -9,6 +9,7 @@
   "scripts": {
     "prebuild": "corepack enable || true",
     "build": "nest build",
+    "railway": "corepack enable || true; pnpm install --frozen-lockfile --prod=false && pnpm run build",
     "start:api": "node dist/api/main.js",
     "start:relay": "node dist/relay/main.js",
     "start:consumer": "node dist/consumer/main.js",
